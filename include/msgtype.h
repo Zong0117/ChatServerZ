@@ -24,5 +24,5 @@ enum MsgType
     JOIN_GROUP_ACK = 601,   //响应
 
     SEND_GROUP_MSG = 700,   //群发消息
-    SEND_GROUP_ACK = 702,   //响应
+    SEND_GROUP_ACK = 701,   //响应
 };
