@@ -29,7 +29,6 @@ bool MySQL::connect()
     {
         //设置字符编码
         mysql_query(_conn, "set names gbk");
-        LOG_INFO << "connect mysql success!";
     }
     else
     {

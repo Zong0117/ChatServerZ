@@ -5,12 +5,13 @@
 class User
 {
 public:
-    User() : _id(-1), _name(""), _password(""), _state("offline") {}
+    User(int id = -1, std::string name = " ", std::string password = "", std::string state = "offline") 
+    :_id(id), _name(name), _password(password), _state(state){}
 
-    void setId(int id) { _id = id; }
-    void setName(const std::string name) { _name = name; }
-    void setPassword(const std::string password) { _password = password; }
-    void setState(const std::string state) { _state = state; }
+    void setId(int id) {_id = id; }
+    void setName(std::string name) {_name = name; }
+    void setPassword(std::string password) { _password = password; }
+    void setState(std::string state) { _state = state; }
 
     int getId() { return this->_id; }
     std::string getName() { return this->_name; }

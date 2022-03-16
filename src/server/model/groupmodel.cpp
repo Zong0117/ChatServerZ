@@ -37,8 +37,8 @@ std::vector<Group> GroupModel::queryGroups(int userID)
     char sql[1024] = {0};
 
     //searched is groupid, groupname, groupdesc
-    sprintf(sql,"select ag.id, ag.groupname, ag.grouprole from all_group ag \
-        inner join group_user gu on ag.id = gu.groupid where gu.userid = %d", userID);
+    sprintf(sql,"select ag.groupid, ag.groupname, ag.groupdesc from all_group ag \
+        inner join group_user gu on ag.groupid = gu.groupid where gu.userid = %d", userID);
 
     MySQL mysql;
     std::vector<Group> groupInfoVec;
@@ -67,7 +67,6 @@ std::vector<Group> GroupModel::queryGroups(int userID)
                 inner join  group_user gu on gu.userid = u.id where gu.groupid = %d",
                     group.getGroupID());
             
-            MySQL mysql;
             MYSQL_RES* res = mysql.query(sql);
             
             if(res != nullptr)

@@ -25,4 +25,7 @@ enum MsgType
 
     SEND_GROUP_MSG = 700,   //群发消息
     SEND_GROUP_ACK = 701,   //响应
+
+    LOGIN_OUT_MSG = 800,
+    LOGIN_OUT_ACK = 801
 };

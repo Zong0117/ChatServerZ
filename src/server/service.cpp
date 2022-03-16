@@ -20,6 +20,8 @@ Service::Service()
     _msgHandlerMap.insert({JOIN_GROUP_MSG, std::bind(&Service::joinGroup, this, _1, _2, _3)});
     //群发消息
     _msgHandlerMap.insert({SEND_GROUP_MSG, std::bind(&Service::sendGroupMessage, this, _1, _2, _3)});
+    //注销业务
+    _msgHandlerMap.insert({LOGIN_OUT_MSG, std::bind(&Service::loginout, this, _1, _2, _3)});
 }
 
 //线程安全
@@ -73,13 +75,13 @@ void Service::login(const TcpConnectionPtr &conn, json &js, Timestamp time)
             response["msgID"] = LOGIN_ACK;
             response["code"] = SUCCESS_NO;
             response["userID"] = user.getId();
-            response["name"] = user.getName();
+            response["userName"] = user.getName();
 
             //查询用户的离线消息
             std::vector<std::string> offLineMSGVec = _offLineMSGModel.query(id);
             if (!offLineMSGVec.empty())
             {
-                response["offLineMessage"] = offLineMSGVec;
+                response["msg"] = offLineMSGVec;
                 _offLineMSGModel.remove(id);
             }
 
@@ -92,11 +94,39 @@ void Service::login(const TcpConnectionPtr &conn, json &js, Timestamp time)
                 {
                     json js;
                     js["userID"] = user.getId();
-                    js["name"] = user.getName();
-                    js["state"] = user.getState();
+                    js["userName"] = user.getName();
+                    js["userState"] = user.getState();
                     tempVec.push_back(js.dump());
                 }
-                response["friend"] = tempVec;
+                response["friends"] = tempVec;
+            }
+
+            //查询用户群组信息
+            std::vector<Group> groupVec = _groupModel.queryGroups(id);
+            if(!groupVec.empty())
+            {
+                std::vector<std::string> tempGroupVec;
+                for(auto& group : groupVec)
+                {
+                    json grpjs;
+                    grpjs["groupID"] = group.getGroupID();
+                    grpjs["groupName"] = group.getGroupName();
+                    grpjs["groupDesc"] = group.getGroupDesc();
+
+                    std::vector<std::string> groupUserVec;
+                    for(auto& user : group.getGroupUser())
+                    {
+                        json js;
+                        js["userID"] = user.getId();
+                        js["userName"] = user.getName();
+                        js["userState"] = user.getState();
+                        js["role"] = user.getGroupRole();
+                        groupUserVec.push_back(js.dump());
+                    }
+                    grpjs["groupUsers"] = groupUserVec;
+                    tempGroupVec.push_back(grpjs.dump());
+                }
+                response["groups"] = tempGroupVec;
             }
             //发送json数据
             conn->send(response.dump());
@@ -121,7 +151,7 @@ void Service::login(const TcpConnectionPtr &conn, json &js, Timestamp time)
 void Service::regis(const TcpConnectionPtr &conn, json &js, Timestamp time)
 {
     LOG_INFO << "IP: " << conn->peerAddress().toIpPort() << " 进行注册！";
-    string name = js["name"];
+    string name = js["userName"];
     string pwd = js["password"];
 
     User user;
@@ -285,10 +315,15 @@ void Service::sendGroupMessage(const TcpConnectionPtr &conn, json &js, Timestamp
             auto it = _userConnMap.find(id);
             if (it != _userConnMap.end())
             {
-                conn->send(js.dump());
+                it->second->send(js.dump());
             }
             else
             {
+                // User user = _userModel.query(id);
+                // if(user.getState() == "online")
+                // {
+
+                // }
                 _offLineMSGModel.insert(id, js.dump());
             }
         }
@@ -299,4 +334,21 @@ void Service::sendGroupMessage(const TcpConnectionPtr &conn, json &js, Timestamp
     response["code"] = SUCCESS_NO;
     response["groupID"] = groupID;
     conn->send(response.dump());
+}
+ //处理注销业务
+void Service::loginout(const TcpConnectionPtr &conn, json &js, Timestamp time)
+{
+    int userID = js["userID"].get<int>();
+
+    {
+        std::lock_guard<std::mutex> lock(_connMutex);
+        auto it = _userConnMap.find(userID);
+        if(it != _userConnMap.end())
+        {
+            _userConnMap.erase(it);
+        }
+    }
+    User user(userID,"","","offline");
+    _userModel.updateState(user);
+    
 }
