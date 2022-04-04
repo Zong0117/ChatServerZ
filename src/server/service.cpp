@@ -20,6 +20,13 @@ Service::Service()
     _msgHandlerMap.insert({JOIN_GROUP_MSG, std::bind(&Service::joinGroup, this, _1, _2, _3)});
     //群发消息
     _msgHandlerMap.insert({SEND_GROUP_MSG, std::bind(&Service::sendGroupMessage, this, _1, _2, _3)});
+    //注销业务
+    _msgHandlerMap.insert({LOGIN_OUT_MSG, std::bind(&Service::loginout, this, _1, _2, _3)});
+
+    if(_redis.connect())
+    {
+        _redis.init_notify_handler(std::bind(&Service::handlerSubscribeMessage, this, _1, _2));
+    }
 }
 
 //线程安全
@@ -65,6 +72,8 @@ void Service::login(const TcpConnectionPtr &conn, json &js, Timestamp time)
                 _userConnMap.insert({id, conn});
             }
 
+            //登陆成功向redis注册channel(id)
+            _redis.subscribe(id);
             //登陆成功 更新用户状态state
             user.setState("online");
             _userModel.updateState(user);
@@ -73,13 +82,13 @@ void Service::login(const TcpConnectionPtr &conn, json &js, Timestamp time)
             response["msgID"] = LOGIN_ACK;
             response["code"] = SUCCESS_NO;
             response["userID"] = user.getId();
-            response["name"] = user.getName();
+            response["userName"] = user.getName();
 
             //查询用户的离线消息
             std::vector<std::string> offLineMSGVec = _offLineMSGModel.query(id);
             if (!offLineMSGVec.empty())
             {
-                response["offLineMessage"] = offLineMSGVec;
+                response["msg"] = offLineMSGVec;
                 _offLineMSGModel.remove(id);
             }
 
@@ -92,11 +101,39 @@ void Service::login(const TcpConnectionPtr &conn, json &js, Timestamp time)
                 {
                     json js;
                     js["userID"] = user.getId();
-                    js["name"] = user.getName();
-                    js["state"] = user.getState();
+                    js["userName"] = user.getName();
+                    js["userState"] = user.getState();
                     tempVec.push_back(js.dump());
                 }
-                response["friend"] = tempVec;
+                response["friends"] = tempVec;
+            }
+
+            //查询用户群组信息
+            std::vector<Group> groupVec = _groupModel.queryGroups(id);
+            if(!groupVec.empty())
+            {
+                std::vector<std::string> tempGroupVec;
+                for(auto& group : groupVec)
+                {
+                    json grpjs;
+                    grpjs["groupID"] = group.getGroupID();
+                    grpjs["groupName"] = group.getGroupName();
+                    grpjs["groupDesc"] = group.getGroupDesc();
+
+                    std::vector<std::string> groupUserVec;
+                    for(auto& user : group.getGroupUser())
+                    {
+                        json js;
+                        js["userID"] = user.getId();
+                        js["userName"] = user.getName();
+                        js["userState"] = user.getState();
+                        js["role"] = user.getGroupRole();
+                        groupUserVec.push_back(js.dump());
+                    }
+                    grpjs["groupUsers"] = groupUserVec;
+                    tempGroupVec.push_back(grpjs.dump());
+                }
+                response["groups"] = tempGroupVec;
             }
             //发送json数据
             conn->send(response.dump());
@@ -121,7 +158,7 @@ void Service::login(const TcpConnectionPtr &conn, json &js, Timestamp time)
 void Service::regis(const TcpConnectionPtr &conn, json &js, Timestamp time)
 {
     LOG_INFO << "IP: " << conn->peerAddress().toIpPort() << " 进行注册！";
-    string name = js["name"];
+    string name = js["userName"];
     string pwd = js["password"];
 
     User user;
@@ -184,6 +221,8 @@ void Service::clientCloseException(const TcpConnectionPtr &conn)
             }
         }
     }
+    //取消订阅channel
+    _redis.unsubscribe(user.getId());
 
     if (user.getId() != -1)
     {
@@ -207,11 +246,18 @@ void Service::privateChat(const TcpConnectionPtr &conn, json &js, Timestamp time
             it->second->send(js.dump());
             return;
         }
-        else
+        //检测用户是否在其他服务器登录
+        User user = _userModel.query(toid);
+        if(user.getState() == "online")
         {
-            //离线消息存储
-            _offLineMSGModel.insert(toid, js.dump());
+            //发布到对应id的channel
+            _redis.publish(toid, js.dump());
+            return;
         }
+       
+        //离线消息存储
+        _offLineMSGModel.insert(toid, js.dump());
+        
     }
     json response;
     response["msgID"] = PRI_CHAT_ACK;
@@ -285,11 +331,20 @@ void Service::sendGroupMessage(const TcpConnectionPtr &conn, json &js, Timestamp
             auto it = _userConnMap.find(id);
             if (it != _userConnMap.end())
             {
-                conn->send(js.dump());
+                it->second->send(js.dump());
             }
             else
             {
-                _offLineMSGModel.insert(id, js.dump());
+                User user = _userModel.query(id);
+                if(user.getState() == "online")
+                {
+                    _redis.publish(id, js.dump());
+                }
+                else
+                {
+                    _offLineMSGModel.insert(id, js.dump());
+                }
+                
             }
         }
     }
@@ -299,4 +354,39 @@ void Service::sendGroupMessage(const TcpConnectionPtr &conn, json &js, Timestamp
     response["code"] = SUCCESS_NO;
     response["groupID"] = groupID;
     conn->send(response.dump());
+}
+ //处理注销业务
+void Service::loginout(const TcpConnectionPtr &conn, json &js, Timestamp time)
+{
+    int userID = js["userID"].get<int>();
+
+    {
+        std::lock_guard<std::mutex> lock(_connMutex);
+        auto it = _userConnMap.find(userID);
+        if(it != _userConnMap.end())
+        {
+            _userConnMap.erase(it);
+        }
+    }
+    //注销向reids取消订阅channel(id)
+    _redis.unsubscribe(userID);
+
+    //更新状态信息
+    User user(userID,"","","offline");
+    _userModel.updateState(user);
+    
+}
+
+//redis中获取channel中的消息
+void Service::handlerSubscribeMessage(int userID, string msg)
+{
+    std::lock_guard<std::mutex> lock(_connMutex);
+    auto it = _userConnMap.find(userID);
+    if(it != _userConnMap.end())
+    {
+        it->second->send(msg);
+        return;
+    }
+    
+    _offLineMSGModel.insert(userID, msg);
 }

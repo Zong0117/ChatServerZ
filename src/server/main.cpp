@@ -10,11 +10,13 @@ void resetHandler(int)
     Service::instance()->reset();
     exit(0);
 }
-int main()
+int main(int argc, char** argv)
 {
+    char* ip = argv[1];
+    int port = atoi(argv[2]);
     signal(SIGINT, resetHandler);
     EventLoop loop;
-    InetAddress addr("127.0.0.1", 6000);
+    InetAddress addr(ip, port);
     ChatServer server(&loop, addr, "ChatServer");
 
     server.start();

@@ -11,6 +11,8 @@ using namespace muduo;
 #include "friendmodel.h"
 #include "groupmodel.h"
 
+#include "redis.h"
+
 #include "json.hpp"
 using json = nlohmann::json;
 
@@ -53,6 +55,11 @@ public:
     //群发消息
     void sendGroupMessage(const TcpConnectionPtr &conn, json &js, Timestamp time);
 
+    //处理注销业务
+    void loginout(const TcpConnectionPtr &conn, json &js, Timestamp time);
+
+    //redis中获取channel中的消息
+    void handlerSubscribeMessage(int userID, string msg);
 private:
     Service();
 
@@ -67,12 +74,13 @@ private:
 
     //保证修改connMap时的线程安全
     std::mutex _connMutex;
-
+    
+    //几个数据操作类对象
     UserModel _userModel;
-
     OffLineMSGModel _offLineMSGModel;
-
     FriendModel _friendModel;
-
     GroupModel _groupModel;
+
+    //redis对象
+    Redis _redis;
 };

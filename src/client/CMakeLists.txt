@@ -1,8 +1,6 @@
-#包含源文件
+#指定SRC_LIST为当前路径下所有源文件
 aux_source_directory(. SRC_LIST)
-
-#生成路径
+#根据SRC_LIST生成可执行文件client
 add_executable(client ${SRC_LIST})
-
-#链接库
+#链接库文件
 target_link_libraries(client pthread)
