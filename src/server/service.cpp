@@ -22,6 +22,11 @@ Service::Service()
     _msgHandlerMap.insert({SEND_GROUP_MSG, std::bind(&Service::sendGroupMessage, this, _1, _2, _3)});
     //注销业务
     _msgHandlerMap.insert({LOGIN_OUT_MSG, std::bind(&Service::loginout, this, _1, _2, _3)});
+
+    if(_redis.connect())
+    {
+        _redis.init_notify_handler(std::bind(&Service::handlerSubscribeMessage, this, _1, _2));
+    }
 }
 
 //线程安全
@@ -67,6 +72,8 @@ void Service::login(const TcpConnectionPtr &conn, json &js, Timestamp time)
                 _userConnMap.insert({id, conn});
             }
 
+            //登陆成功向redis注册channel(id)
+            _redis.subscribe(id);
             //登陆成功 更新用户状态state
             user.setState("online");
             _userModel.updateState(user);
@@ -214,6 +221,8 @@ void Service::clientCloseException(const TcpConnectionPtr &conn)
             }
         }
     }
+    //取消订阅channel
+    _redis.unsubscribe(user.getId());
 
     if (user.getId() != -1)
     {
@@ -237,11 +246,18 @@ void Service::privateChat(const TcpConnectionPtr &conn, json &js, Timestamp time
             it->second->send(js.dump());
             return;
         }
-        else
+        //检测用户是否在其他服务器登录
+        User user = _userModel.query(toid);
+        if(user.getState() == "online")
         {
-            //离线消息存储
-            _offLineMSGModel.insert(toid, js.dump());
+            //发布到对应id的channel
+            _redis.publish(toid, js.dump());
+            return;
         }
+       
+        //离线消息存储
+        _offLineMSGModel.insert(toid, js.dump());
+        
     }
     json response;
     response["msgID"] = PRI_CHAT_ACK;
@@ -319,12 +335,16 @@ void Service::sendGroupMessage(const TcpConnectionPtr &conn, json &js, Timestamp
             }
             else
             {
-                // User user = _userModel.query(id);
-                // if(user.getState() == "online")
-                // {
-
-                // }
-                _offLineMSGModel.insert(id, js.dump());
+                User user = _userModel.query(id);
+                if(user.getState() == "online")
+                {
+                    _redis.publish(id, js.dump());
+                }
+                else
+                {
+                    _offLineMSGModel.insert(id, js.dump());
+                }
+                
             }
         }
     }
@@ -348,7 +368,25 @@ void Service::loginout(const TcpConnectionPtr &conn, json &js, Timestamp time)
             _userConnMap.erase(it);
         }
     }
+    //注销向reids取消订阅channel(id)
+    _redis.unsubscribe(userID);
+
+    //更新状态信息
     User user(userID,"","","offline");
     _userModel.updateState(user);
     
+}
+
+//redis中获取channel中的消息
+void Service::handlerSubscribeMessage(int userID, string msg)
+{
+    std::lock_guard<std::mutex> lock(_connMutex);
+    auto it = _userConnMap.find(userID);
+    if(it != _userConnMap.end())
+    {
+        it->second->send(msg);
+        return;
+    }
+    
+    _offLineMSGModel.insert(userID, msg);
 }

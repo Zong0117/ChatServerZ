@@ -6,7 +6,7 @@ class User
 {
 public:
     User(int id = -1, std::string name = " ", std::string password = "", std::string state = "offline") 
-    :_id(id), _name(name), _password(password), _state(state){}
+        :_id(id), _name(name), _password(password), _state(state){}
 
     void setId(int id) {_id = id; }
     void setName(std::string name) {_name = name; }

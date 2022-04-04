@@ -3,7 +3,7 @@
 
 using namespace std;
 
-int main()
+int main(int argc, char** argv)
 {
     // char ip[128] = {0};
     // int port = -1;
@@ -13,7 +13,11 @@ int main()
     // cin >> port;
     // cin.get();
     // system("clear");
+
+    // char* ip = argv[1];
+    // int port = atoi(argv[2]);
+
     Client client;
 
-    client.clientStart("127.0.0.1", 6000);
+    client.clientStart("127.0.0.1", 8000);
 }

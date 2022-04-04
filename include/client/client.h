@@ -30,19 +30,19 @@ public:
 
     string getCurrentTime();
 public:
-    // "help" command handler
+    // "help" 
     void help(string);
-    // "chat" command handler
+    // "chat"
     void chat(string);
-    // "addfriend" command handler
+    // "addfriend"
     void addFriend(string);
-    // "creategroup" command handler
+    // "creategroup"
     void createGroup(string);
-    // "addgroup" command handler
+    // "addgroup" 
     void joinGroup(string);
-    // "groupchat" command handler
+    // "groupchat" 
     void groupChat(string);
-    // "loginout" command handler
+    // "loginout"
     void loginout(string);
 public:
     static int readThreadNumb;

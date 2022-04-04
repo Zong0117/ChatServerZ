@@ -12,8 +12,7 @@
 using json = nlohmann::json;
 int Client::readThreadNumb = 0;
 Client::Client()
-{
-    
+{ 
     _commandHandlerMap.insert({"help", std::bind(&Client::help, this, _1)});
     _commandHandlerMap.insert({"chat", std::bind(&Client::chat, this, _1)});
     _commandHandlerMap.insert({"addfriend", std::bind(&Client::addFriend, this, _1)});
