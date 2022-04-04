@@ -146,9 +146,9 @@ void Service::login(const TcpConnectionPtr &conn, json &js, Timestamp time)
     {
         //登陆失败 用户不存在或用户存在或密码错误
         json response;
-        response["msgId"] = LOGIN_ACK;
+        response["msgID"] = LOGIN_ACK;
         response["code"] = FAILD_NO;
-        response["errorMsg"] = "用户不存在或用户名密码错误！";
+        response["errorMsg"] = "登陆失败!";
         conn->send(response.dump());
         LOG_INFO << "IP: " << conn->peerAddress().toIpPort()
                  << " 登录失败！";
@@ -169,9 +169,9 @@ void Service::regis(const TcpConnectionPtr &conn, json &js, Timestamp time)
     if (isRegSuccess)
     {
         json response;
-        response["msgId"] = REGIS_ACK;
+        response["msgID"] = REGIS_ACK;
         response["code"] = SUCCESS_NO;
-        response["userId"] = user.getId();
+        response["userID"] = user.getId();
         conn->send(response.dump());
         LOG_INFO << "IP: " << conn->peerAddress().toIpPort()
                  << " 注册成功!";
@@ -179,9 +179,9 @@ void Service::regis(const TcpConnectionPtr &conn, json &js, Timestamp time)
     else
     {
         json response;
-        response["msgId"] = REGIS_ACK;
+        response["msgID"] = REGIS_ACK;
         response["code"] = FAILD_NO;
-        response["errorMsg"] = "注册失败";
+        response["errorMsg"] = "注册失败!";
         conn->send(response.dump());
         LOG_INFO << "IP: " << conn->peerAddress().toIpPort()
                  << " 注册失败!";
