@@ -9,9 +9,12 @@
 #include <string>
 #include <unordered_map>
 #include <functional>
+#include <atomic>
+#include <semaphore.h>
 
 using namespace std;
 using namespace std::placeholders;
+using json = nlohmann::json;
 
 class Client
 {
@@ -27,7 +30,10 @@ public:
     std::string getTime();
     //客户端主体程序
     void clientStart(char *, unsigned int);
-
+    //处理登录响应
+    void doLoginResponse(json&);
+    //处理注册响应
+    void doRegisResponse(json&);
     string getCurrentTime();
 public:
     // "help" 
@@ -51,12 +57,12 @@ private:
     int _clientFD;
 
     bool _isMainMenuRunning = false;
-
-    
-
+    //读写线程通信
+    sem_t _rwsem;
+    //记录登陆状态
+    atomic<bool> _isLoginSuccess{false};
     //记录当前用户信息
     User _currentUser;
-
     //记录当前用户好友信息
     std::vector<User> _currentFriend;
 
